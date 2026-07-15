@@ -1,9 +1,233 @@
-const state={board:initialBoard(),turn:WHITE,selected:null,history:[],flipped:false,mode:'bot'};
-const boardEl=document.getElementById('board'), statusEl=document.getElementById('status'), analysisEl=document.getElementById('analysis');
-function render(){boardEl.innerHTML=''; const rows=[...Array(8).keys()], cols=[...Array(8).keys()]; if(state.flipped){rows.reverse();cols.reverse()} const moves=state.selected?legalMoves(state.board,state.turn).filter(m=>m.from[0]===state.selected[0]&&m.from[1]===state.selected[1]):[]; for(const r of rows)for(const c of cols){const cell=document.createElement('button'); cell.className=`cell ${(r+c)%2?'dark':'light'}`; cell.dataset.r=r;cell.dataset.c=c; const move=moves.find(m=>m.to[0]===r&&m.to[1]===c); if(move)cell.classList.add('target'); if(state.selected?.[0]===r&&state.selected?.[1]===c)cell.classList.add('selected'); const p=state.board[r][c]; if(p){const piece=document.createElement('span'); piece.className=`piece ${p.color===WHITE?'white':'black'} ${p.king?'king':''}`; piece.textContent=p.king?'♛':''; cell.append(piece)} cell.onclick=()=>clickCell(r,c); boardEl.append(cell)} statusEl.textContent=`Ход: ${state.turn===WHITE?'белые (вы)':'черные (бот)'}. Обязательные взятия учитываются.`}
-function clickCell(r,c){if(state.turn!==WHITE)return; const p=state.board[r][c]; if(p?.color===WHITE){state.selected=[r,c];render();return} if(!state.selected)return; const m=legalMoves(state.board,WHITE).find(x=>x.from[0]===state.selected[0]&&x.from[1]===state.selected[1]&&x.to[0]===r&&x.to[1]===c); if(m)move(m,true); else state.selected=null; render()}
-function move(m,botAfter){state.history.push({board:cloneBoard(state.board),turn:state.turn}); state.board=applyMove(state.board,m); state.turn=state.turn===WHITE?BLACK:WHITE; state.selected=null; explain(m); render(); if(botAfter&&state.turn===BLACK)setTimeout(botMove,350)}
-function botMove(){const best=bestMoves(state.board,BLACK,5)[0]; if(best)move(best,false)}
-function explain(last){const side=state.turn===WHITE?WHITE:BLACK, candidates=bestMoves(state.board,side,4); const evalForWhite=evaluate(state.board,WHITE); analysisEl.innerHTML=`<p>📍 <b>Оценка позиции:</b> ${evalForWhite>0?'+':''}${evalForWhite} для белых</p><p>🏆 <b>Последний ход:</b> ${notation(last)}</p><p>📖 <b>Почему:</b> ход ${last.captures.length?'забирает материал и сохраняет темп':'улучшает активность и контроль центра'}.</p><p>⚠️ <b>После ответа:</b> проверяем обязательные взятия, угрозы прохода в дамки и тактические удары.</p><p>🎯 <b>План:</b> занять центр, навязать выгодный размен, провести отдалённую шашку в дамки и не давать контригры.</p><p>♟ <b>Лучшие альтернативы:</b></p><ol>${candidates.map(m=>`<li>${notation(m)} — оценка ${m.score>0?'+':''}${m.score}</li>`).join('')||'<li>Нет легальных ходов</li>'}</ol>`}
-document.getElementById('hint').onclick=()=>{const ms=bestMoves(state.board,state.turn,5); analysisEl.innerHTML=`<p>📍 <b>Оценка:</b> ${evaluate(state.board,WHITE)}</p><p>🏆 <b>Лучший ход:</b> ${ms[0]?notation(ms[0]):'нет ходов'}</p><p>📖 <b>Почему:</b> выбран поиском alpha-beta с учетом материала, дамок, центра и темпа.</p><p>♟ <b>Топ-3:</b></p><ol>${ms.map(m=>`<li>${notation(m)} — ${m.score}</li>`).join('')}</ol>`};
-document.getElementById('undo').onclick=()=>{const h=state.history.pop(); if(h){state.board=h.board;state.turn=h.turn;render()}};document.getElementById('flip').onclick=()=>{state.flipped=!state.flipped;render()};document.getElementById('newBot').onclick=()=>{state.board=initialBoard();state.turn=WHITE;state.history=[];analysisEl.textContent='Новая партия против бота готова.';render()};document.getElementById('copyRoom').onclick=()=>{const id=Math.random().toString(36).slice(2,8).toUpperCase(); const url=location.href.split('#')[0]+'#room-'+id; document.getElementById('room').textContent=`Комната ${id}: ${url}. В следующей версии подключим WebRTC/сервер матчмейкинга; сейчас это UX-прототип ссылки.`; navigator.clipboard?.writeText(url)};render();
+const state = {
+  board: initialBoard(),
+  turn: WHITE,
+  selected: null,
+  history: [],
+  flipped: false,
+  editor: false,
+  roomId: null,
+};
+
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const analysisEl = document.getElementById('analysis');
+const blunderGuardEl = document.getElementById('blunderGuard');
+const playerProfileEl = document.getElementById('playerProfile');
+const pdnEl = document.getElementById('pdn');
+let worker;
+
+function getWorker() {
+  if (!window.Worker) return null;
+  worker ??= new Worker('src/engine.worker.js');
+  return worker;
+}
+
+function render() {
+  boardEl.innerHTML = '';
+  const rows = [...Array(SIZE).keys()];
+  const cols = [...Array(SIZE).keys()];
+  if (state.flipped) {
+    rows.reverse();
+    cols.reverse();
+  }
+
+  const legalTargets = state.selected
+    ? legalMoves(state.board, state.turn).filter((move) => sameSquare(move.from, state.selected))
+    : [];
+
+  for (const row of rows) {
+    for (const col of cols) {
+      const cell = document.createElement('button');
+      cell.className = `cell ${isPlayable(row, col) ? 'dark' : 'light'}`;
+      cell.dataset.row = row;
+      cell.dataset.col = col;
+
+      const target = legalTargets.find((move) => sameSquare(move.to, [row, col]));
+      if (target) cell.classList.add('target');
+      if (state.selected && sameSquare(state.selected, [row, col])) cell.classList.add('selected');
+
+      const piece = state.board[row][col];
+      if (piece) cell.append(renderPiece(piece));
+      cell.addEventListener('click', () => handleCellClick(row, col));
+      boardEl.append(cell);
+    }
+  }
+
+  const moves = legalMoves(state.board, state.turn);
+  statusEl.textContent = moves.length
+    ? `Ход: ${state.turn === WHITE ? 'белые (вы)' : 'черные (бот)'}. ${state.editor ? 'Режим редактора включён.' : 'Обязательные и максимальные взятия учитываются.'}`
+    : `Партия завершена: ${state.turn === WHITE ? 'у белых' : 'у черных'} нет ходов.`;
+  playerProfileEl.textContent = classifyPlayer(state.history);
+}
+
+function renderPiece(piece) {
+  const element = document.createElement('span');
+  element.className = `piece ${piece.color === WHITE ? 'white' : 'black'} ${piece.king ? 'king' : ''}`;
+  element.textContent = piece.king ? '♛' : '';
+  return element;
+}
+
+function handleCellClick(row, col) {
+  if (state.editor) {
+    cycleEditorPiece(row, col);
+    return;
+  }
+  if (state.turn !== WHITE) return;
+
+  const piece = state.board[row][col];
+  if (piece?.color === WHITE) {
+    state.selected = [row, col];
+    updateBlunderGuard();
+    render();
+    return;
+  }
+
+  if (!state.selected) return;
+  const move = legalMoves(state.board, WHITE).find((candidate) => sameSquare(candidate.from, state.selected) && sameSquare(candidate.to, [row, col]));
+  if (move) playMove(move, true);
+  state.selected = null;
+  render();
+}
+
+function cycleEditorPiece(row, col) {
+  const piece = state.board[row][col];
+  if (!piece) state.board[row][col] = { color: WHITE, king: false };
+  else if (piece.color === WHITE && !piece.king) state.board[row][col] = { color: WHITE, king: true };
+  else if (piece.color === WHITE) state.board[row][col] = { color: BLACK, king: false };
+  else if (!piece.king) state.board[row][col] = { color: BLACK, king: true };
+  else state.board[row][col] = null;
+  pdnEl.value = boardToFen(state.board, state.turn);
+  render();
+}
+
+function playMove(move, botAfter) {
+  state.history.push({ board: cloneBoard(state.board), turn: state.turn, move, color: state.turn });
+  state.board = applyMove(state.board, move);
+  state.turn = opponent(state.turn);
+  explainMove(move);
+  render();
+  if (botAfter && state.turn === BLACK) setTimeout(botMove, 220);
+}
+
+function botMove() {
+  const workerInstance = getWorker();
+  if (!workerInstance) {
+    const best = bestMoves(state.board, BLACK, 5)[0];
+    if (best) playMove(best, false);
+    return;
+  }
+  workerInstance.onmessage = (event) => {
+    const [best] = event.data.moves;
+    if (best) playMove(best, false);
+  };
+  workerInstance.postMessage({ board: state.board, color: BLACK, depth: 5 });
+}
+
+function explainMove(lastMove) {
+  const candidates = bestMoves(state.board, state.turn, 4);
+  const evalForWhite = evaluate(state.board, WHITE);
+  analysisEl.innerHTML = `
+    <p>📍 <b>Оценка позиции:</b> ${formatScore(evalForWhite)} для белых</p>
+    <p>🏆 <b>Последний ход:</b> ${notation(lastMove)}</p>
+    <p>📖 <b>Почему:</b> ${lastMove.captures.length ? 'ход выигрывает материал и сохраняет инициативу' : 'ход улучшает темп, центр и безопасность фигур'}.</p>
+    <p>⚠️ <b>Ответ соперника:</b> ${candidates[0] ? `главная угроза — ${notation(candidates[0])}` : 'легальных ответов нет'}.</p>
+    <p>🎯 <b>План:</b> ограничить контригру, провести активную шашку в дамки и упрощать только при выгодной оценке.</p>
+    <ol>${candidates.map((move) => `<li>${notation(move)} — ${formatScore(move.score)}</li>`).join('') || '<li>Нет легальных ходов</li>'}</ol>
+  `;
+  exportPdn();
+}
+
+function updateBlunderGuard() {
+  if (!state.selected) return;
+  const [candidate] = legalMoves(state.board, WHITE).filter((move) => sameSquare(move.from, state.selected));
+  blunderGuardEl.textContent = candidate ? dangerReport(state.board, WHITE, candidate) || 'Выбранная шашка не даёт очевидного тактического зевка.' : 'У выбранной шашки нет легальных ходов.';
+}
+
+function showHint() {
+  const candidates = bestMoves(state.board, state.turn, 5);
+  analysisEl.innerHTML = `
+    <p>📍 <b>Оценка:</b> ${formatScore(evaluate(state.board, WHITE))} для белых</p>
+    <p>🏆 <b>Лучший ход:</b> ${candidates[0] ? notation(candidates[0]) : 'нет ходов'}</p>
+    <p>📖 <b>Почему:</b> поиск учитывает материал, дамок, продвижение, центр, максимальное взятие и контрудары.</p>
+    <p>♟ <b>Топ-3:</b></p>
+    <ol>${candidates.map((move) => `<li>${notation(move)} — ${formatScore(move.score)}</li>`).join('') || '<li>Нет кандидатов</li>'}</ol>
+  `;
+}
+
+function exportPdn() {
+  const moves = state.history.map((entry, index) => moveToPdn(entry.move, Math.floor(index / 2) + 1, entry.color));
+  pdnEl.value = `${moves.join(' ')}\n\nFEN ${boardToFen(state.board, state.turn)}`.trim();
+}
+
+function importFen() {
+  const fenLine = pdnEl.value.split('\n').find((line) => line.trim().startsWith('FEN')) || pdnEl.value;
+  const fen = fenLine.replace(/^FEN\s*/i, '').trim();
+  const imported = fenToBoard(fen);
+  state.board = imported.board;
+  state.turn = imported.turn;
+  state.selected = null;
+  state.history = [];
+  analysisEl.textContent = 'Позиция импортирована. Нажмите «Анализ позиции», чтобы получить план.';
+  render();
+}
+
+function startTraining() {
+  const position = trainingPosition();
+  state.board = position.board;
+  state.turn = position.turn;
+  state.selected = null;
+  state.history = [];
+  analysisEl.textContent = position.goal;
+  render();
+}
+
+function sameSquare(left, right) {
+  return left[0] === right[0] && left[1] === right[1];
+}
+
+function formatScore(score) {
+  return `${score > 0 ? '+' : ''}${score}`;
+}
+
+document.getElementById('hint').addEventListener('click', showHint);
+document.getElementById('undo').addEventListener('click', () => {
+  const previous = state.history.pop();
+  if (!previous) return;
+  state.board = previous.board;
+  state.turn = previous.turn;
+  render();
+  exportPdn();
+});
+document.getElementById('flip').addEventListener('click', () => {
+  state.flipped = !state.flipped;
+  render();
+});
+document.getElementById('editor').addEventListener('click', () => {
+  state.editor = !state.editor;
+  analysisEl.textContent = state.editor ? 'Редактор включён: кликайте по клеткам, чтобы менять фигуры.' : 'Редактор выключен.';
+  render();
+});
+document.getElementById('newBot').addEventListener('click', () => {
+  state.board = initialBoard();
+  state.turn = WHITE;
+  state.history = [];
+  state.selected = null;
+  analysisEl.textContent = 'Новая партия против бота готова.';
+  render();
+  exportPdn();
+});
+document.getElementById('training').addEventListener('click', startTraining);
+document.getElementById('copyRoom').addEventListener('click', () => {
+  state.roomId = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const url = `${location.href.split('#')[0]}#room-${state.roomId}`;
+  document.getElementById('room').textContent = `Комната ${state.roomId}: ${url}`;
+  navigator.clipboard?.writeText(url);
+});
+document.getElementById('exportPdn').addEventListener('click', exportPdn);
+document.getElementById('importFen').addEventListener('click', importFen);
+document.getElementById('photoInput').addEventListener('change', () => {
+  analysisEl.textContent = 'Фото принято. Следующий этап — подключить CV-распознавание клеток и проверку неоднозначных фигур.';
+});
+
+render();
+exportPdn();
