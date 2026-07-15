@@ -1,0 +1,3 @@
+const assert=require('assert');const {initialBoard,legalMoves,applyMove,bestMoves,WHITE,BLACK}=require('../src/checkers');
+const b=initialBoard();assert.strictEqual(b.flat().filter(Boolean).length,24,'initial position has 24 pieces');assert(legalMoves(b,WHITE).length>0,'white has legal moves');const m=legalMoves(b,WHITE)[0];const b2=applyMove(b,m);assert.strictEqual(b2.flat().filter(Boolean).length,24,'quiet move keeps material');assert(bestMoves(b2,BLACK,2).length>0,'bot finds candidate moves');
+const cap=Array.from({length:8},()=>Array(8).fill(null));cap[5][0]={color:WHITE,king:false};cap[4][1]={color:BLACK,king:false};assert(legalMoves(cap,WHITE)[0].captures.length===1,'captures are mandatory');console.log('checkers engine tests passed');
