@@ -171,3 +171,27 @@ textarea {
 @media (max-width: 560px) {
   .idea-grid { grid-template-columns: 1fr; }
 }
+
+.feature-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.feature-buttons button {
+  padding: 10px;
+  font-size: 13px;
+}
+
+.feature-output {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #0f172a;
+  line-height: 1.5;
+}
+
+.feature-output ol {
+  padding-left: 20px;
+}

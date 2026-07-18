@@ -5,12 +5,16 @@ const {
   applyMove,
   bestMoves,
   boardToFen,
+  coachReport,
   createEmptyBoard,
   dangerReport,
   fenToBoard,
+  generatePuzzle,
   initialBoard,
   legalMoves,
   notation,
+  openingHint,
+  replayFrames,
   trainingPosition,
 } = require('../src/checkers');
 
@@ -45,5 +49,10 @@ assert.strictEqual(imported.board.flat().filter(Boolean).length, 24, 'FEN restor
 const training = trainingPosition();
 assert.strictEqual(training.turn, WHITE, 'training position starts with white');
 assert(dangerReport(board, WHITE, quietMove) === null || typeof dangerReport(board, WHITE, quietMove) === 'string', 'danger report is nullable text');
+const history = [{ move: quietMove, color: WHITE }];
+assert(coachReport(history, afterQuietMove, WHITE).summary.includes('Сыграно ходов'), 'coach report summarizes history');
+assert(openingHint(history).length > 0, 'opening hint returns text');
+assert(generatePuzzle(afterQuietMove, BLACK).answer, 'puzzle generator returns an answer');
+assert.strictEqual(replayFrames(history)[0].notation, notation(quietMove), 'replay frames include move notation');
 
 console.log('checkers engine tests passed');

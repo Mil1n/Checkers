@@ -14,6 +14,8 @@ const analysisEl = document.getElementById('analysis');
 const blunderGuardEl = document.getElementById('blunderGuard');
 const playerProfileEl = document.getElementById('playerProfile');
 const pdnEl = document.getElementById('pdn');
+const featureOutputEl = document.getElementById('featureOutput');
+let pendingMove = null;
 let worker;
 
 function getWorker() {
@@ -84,7 +86,16 @@ function handleCellClick(row, col) {
 
   if (!state.selected) return;
   const move = legalMoves(state.board, WHITE).find((candidate) => sameSquare(candidate.from, state.selected) && sameSquare(candidate.to, [row, col]));
-  if (move) playMove(move, true);
+  if (move) {
+    const warning = dangerReport(state.board, WHITE, move);
+    const confirmsPending = pendingMove && sameSquare(pendingMove.from, move.from) && sameSquare(pendingMove.to, move.to);
+    if (warning && !confirmsPending) {
+      pendingMove = move;
+      blunderGuardEl.textContent = `${warning} Нажмите этот ход ещё раз, чтобы подтвердить.`;
+    } else {
+      playMove(move, true);
+    }
+  }
   state.selected = null;
   render();
 }
@@ -101,6 +112,7 @@ function cycleEditorPiece(row, col) {
 }
 
 function playMove(move, botAfter) {
+  pendingMove = null;
   state.history.push({ board: cloneBoard(state.board), turn: state.turn, move, color: state.turn });
   state.board = applyMove(state.board, move);
   state.turn = opponent(state.turn);
@@ -181,6 +193,44 @@ function startTraining() {
   render();
 }
 
+
+function showCoachReport() {
+  const report = coachReport(state.history, state.board, WHITE);
+  featureOutputEl.innerHTML = `<b>${report.title}</b><p>${report.summary}</p><p>✨ Ключевой момент: ${report.bestMoment}</p><p>🎯 Совет: ${report.advice}</p>`;
+}
+
+function showOpeningBook() {
+  featureOutputEl.innerHTML = `<b>📚 Дебютный навигатор</b><p>${openingHint(state.history)}</p>`;
+}
+
+function showGeneratedPuzzle() {
+  const puzzle = generatePuzzle(state.board, state.turn);
+  featureOutputEl.innerHTML = `<b>🧩 Персональная задача</b><p>${puzzle.prompt}</p><p>Ответ тренера: ${puzzle.answer || 'нет'} ${puzzle.score !== undefined ? `(${formatScore(puzzle.score)})` : ''}</p>`;
+}
+
+function saveCurrentPosition() {
+  const saved = JSON.parse(localStorage.getItem('checkers-lab') || '[]');
+  saved.push({ createdAt: new Date().toISOString(), fen: boardToFen(state.board, state.turn) });
+  localStorage.setItem('checkers-lab', JSON.stringify(saved.slice(-12)));
+  featureOutputEl.innerHTML = `<b>🧪 Лаборатория позиций</b><p>Позиция сохранена. В лаборатории хранится ${Math.min(saved.length, 12)} последних позиций.</p>`;
+}
+
+function showReplay() {
+  const frames = replayFrames(state.history);
+  featureOutputEl.innerHTML = `<b>🎥 Кино партии</b>${frames.length ? `<ol>${frames.map((frame) => `<li>${frame.notation} — ${frame.caption}</li>`).join('')}</ol>` : '<p>Сначала сделайте несколько ходов.</p>'}`;
+}
+
+function showSeasonChallenge() {
+  const challenges = [
+    'Не сделай ни одного зевка 10 ходов подряд.',
+    'Найди 3 позиции, где лучший ход — взятие.',
+    'Выиграй тренировочную позицию без потери шашки.',
+    'Проведи шашку в дамки и сохрани её 5 ходов.',
+  ];
+  const challenge = challenges[state.history.length % challenges.length];
+  featureOutputEl.innerHTML = `<b>🏆 Сезонный челлендж</b><p>${challenge}</p>`;
+}
+
 function sameSquare(left, right) {
   return left[0] === right[0] && left[1] === right[1];
 }
@@ -228,6 +278,12 @@ document.getElementById('importFen').addEventListener('click', importFen);
 document.getElementById('photoInput').addEventListener('change', () => {
   analysisEl.textContent = 'Фото принято. Следующий этап — подключить CV-распознавание клеток и проверку неоднозначных фигур.';
 });
+document.getElementById('coachReport').addEventListener('click', showCoachReport);
+document.getElementById('openingBook').addEventListener('click', showOpeningBook);
+document.getElementById('makePuzzle').addEventListener('click', showGeneratedPuzzle);
+document.getElementById('savePosition').addEventListener('click', saveCurrentPosition);
+document.getElementById('replay').addEventListener('click', showReplay);
+document.getElementById('season').addEventListener('click', showSeasonChallenge);
 
 render();
 exportPdn();

@@ -253,6 +253,47 @@ function trainingPosition() {
   return { board, turn: WHITE, goal: 'Спасти позицию: найди ход, который не отдаёт немедленную дамку и создаёт встречные угрозы.' };
 }
 
+
+function coachReport(history, board, color = WHITE) {
+  const moves = history.map((entry) => entry.move);
+  const captures = moves.filter((move) => move.captures.length).length;
+  const bestMoment = moves.find((move) => move.captures.length) || moves[0] || null;
+  const currentEval = evaluate(board, color);
+  return {
+    title: history.length ? 'Пост-партийный тренерский отчёт' : 'Отчёт появится после первого хода',
+    summary: history.length
+      ? `Сыграно ходов: ${history.length}. Взятия: ${captures}. Текущая оценка: ${currentEval > 0 ? '+' : ''}${currentEval}.`
+      : 'Сделайте ход, чтобы тренер начал собирать ключевые моменты партии.',
+    bestMoment: bestMoment ? notation(bestMoment) : 'пока нет ходов',
+    advice: currentEval < -1 ? 'Ищи упрощения, вечные угрозы и ловушки.' : 'Продолжай ограничивать контригру и усиливать центр.',
+  };
+}
+
+function openingHint(history) {
+  const firstMoves = history.map((entry) => notation(entry.move)).slice(0, 4).join(' ');
+  if (!history.length) return 'Дебютный план: займи центр, развивай оба фланга и не отдавай темп без причины.';
+  if (firstMoves.includes('c3') || firstMoves.includes('f4')) return 'Похоже на центральную игру: держи опорные поля и готовь выгодный размен.';
+  return `Линия: ${firstMoves}. План: развивай отсталые шашки и проверь тактические удары перед разменом.`;
+}
+
+function generatePuzzle(board, color = WHITE) {
+  const [best] = bestMoves(board, color, 4);
+  if (!best) return { prompt: 'В этой позиции нет легальных ходов.', answer: null };
+  return {
+    prompt: `Задача: найди лучший ход за ${color === WHITE ? 'белых' : 'чёрных'} и объясни угрозу соперника.`,
+    answer: notation(best),
+    score: best.score,
+  };
+}
+
+function replayFrames(history) {
+  return history.map((entry, index) => ({
+    moveNumber: index + 1,
+    notation: notation(entry.move),
+    caption: entry.move.captures.length ? 'Тактический момент: взятие.' : 'Позиционный ход: улучшаем расстановку.',
+  }));
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     BLACK,
@@ -262,6 +303,7 @@ if (typeof module !== 'undefined') {
     applyMove,
     bestMoves,
     boardToFen,
+    coachReport,
     capturesFrom,
     classifyPlayer,
     cloneBoard,
@@ -269,13 +311,16 @@ if (typeof module !== 'undefined') {
     dangerReport,
     evaluate,
     fenToBoard,
+    generatePuzzle,
     initialBoard,
     isPlayable,
     legalMoves,
     moveToPdn,
     notation,
+    openingHint,
     opponent,
     parseSquare,
+    replayFrames,
     squareName,
     trainingPosition,
   };

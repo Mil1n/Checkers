@@ -171,7 +171,7 @@ npm test
 - 🏁 турнирные ничейные правила;
 - 🧑‍🏫 персональные тренировочные наборы.
 
-Подробнее — в [`ROADMAP.md`](ROADMAP.md).
+Подробнее — в [`ROADMAP.md`](ROADMAP.md) и в [`docs/IDEAS.md`](docs/IDEAS.md).
 
 ---
 
