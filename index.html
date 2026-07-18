@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Checkers Grandmaster</title>
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Русские шашки онлайн + бот</p>
+        <h1>Шашки, которые объясняют победу, а не просто ходят</h1>
+        <p>Обычные сервисы дают комнату, бота и подсказку. Мы делаем тренерский слой: оценка, анти-зевок, профиль игрока, редактор позиций, PDN и режим спасения проигранных партий.</p>
+        <div class="actions">
+          <button id="newBot">Играть с ботом</button>
+          <button id="training">Спасти позицию</button>
+          <button id="copyRoom">Создать онлайн-комнату</button>
+        </div>
+      </div>
+      <aside class="research">
+        <h2>Что есть у других</h2>
+        <ul>
+          <li>Онлайн/AI без регистрации</li>
+          <li>Уровни сложности, подсказки, undo</li>
+          <li>Турниры, рейтинги, задачи</li>
+          <li>Редактор доски и анализ партии</li>
+        </ul>
+        <h2>Наше отличие</h2>
+        <p>Не просто «сделай ход», а «пойми, почему это выигрывает».</p>
+      </aside>
+    </section>
+
+    <section class="ideas">
+      <h2>Вау-фичи MVP</h2>
+      <div class="idea-grid">
+        <article><b>🛡️ Анти-зевок</b><span id="blunderGuard">Выберите ход — мы проверим контрудар.</span></article>
+        <article><b>📸 Фото доски</b><span><input id="photoInput" type="file" accept="image/*"> Пока это заготовка распознавания.</span></article>
+        <article><b>🧠 Профиль игрока</b><span id="playerProfile">Профиль появится после нескольких ходов.</span></article>
+        <article><b>🔥 Спасти позицию</b><span>Тренировка ничейных ресурсов и неприятной защиты.</span></article>
+      </div>
+    </section>
+
+    <section class="game">
+      <div>
+        <div id="board" class="board" aria-label="Доска русских шашек"></div>
+        <div class="toolbar">
+          <button id="hint">Анализ позиции</button>
+          <button id="undo">Отменить</button>
+          <button id="flip">Повернуть</button>
+          <button id="editor">Редактор</button>
+        </div>
+      </div>
+      <aside class="panel">
+        <h2>🏆 Гроссмейстерский анализ</h2>
+        <div id="status" class="status"></div>
+        <div id="analysis" class="analysis"></div>
+        <h3>PDN / позиция</h3>
+        <textarea id="pdn" rows="5" placeholder="Здесь появится история ходов или FEN-позиция"></textarea>
+        <div class="toolbar compact">
+          <button id="exportPdn">Экспорт</button>
+          <button id="importFen">Импорт FEN</button>
+        </div>
+        <h3>Онлайн-комната</h3>
+        <p id="room">Создайте ссылку для друга. В MVP это локальный UX-прототип, следующий шаг — WebSocket/WebRTC.</p>
+        <h3>🚀 Тренерские фичи</h3>
+        <div class="feature-buttons">
+          <button id="coachReport">Отчёт</button>
+          <button id="openingBook">Дебют</button>
+          <button id="makePuzzle">Задача</button>
+          <button id="savePosition">Сохранить позицию</button>
+          <button id="replay">Кино партии</button>
+          <button id="season">Челлендж</button>
+        </div>
+        <div id="featureOutput" class="feature-output">Выберите тренерскую фичу.</div>
+      </aside>
+    </section>
+  </main>
+  <script src="src/checkers.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
